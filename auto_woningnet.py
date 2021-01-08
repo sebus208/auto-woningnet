@@ -79,15 +79,11 @@ def reageer():
     b.quit()
 
 
-def init():
-    b = webdriver.Firefox()
-    b.get(LOGIN)
-    b.maximize_window()
+b = webdriver.Firefox()
+b.get(LOGIN)
+b.maximize_window()
 
-    noCookies()
-    login()
-    b.get(LOTING)
-    reageer()
-
-
-init()
+noCookies()
+login()
+b.get(LOTING)
+reageer()
