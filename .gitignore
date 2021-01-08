@@ -6,7 +6,7 @@
 !.gitignore
 !LICENSE
 !README.md
-!auto_loting_woning.py
+!auto_woningnet.py
 
 # ...even if they are in subdirectories
 !*/
