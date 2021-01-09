@@ -2,35 +2,37 @@ import config
 import time
 import subprocess as s
 from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-LOGIN = "https://www.woningnetregioamsterdam.nl/Inloggen"
-LOTING = "https://www.woningnetregioamsterdam.nl/Zoeken#model[Loting]~predef[2]"
-
-## TODO Make headless
+WONINGNET = "https://www.woningnetregioamsterdam.nl/"
+LOGIN = WONINGNET + "Inloggen"
+LOTING = WONINGNET + "Zoeken#model[Loting]~predef[2]"
+REGULIER = WONINGNET + "Zoeken#model[Regulier aanbod]~soort[Jongerenwoning]~predef[]"
 
 
 def noCookies():
     b.find_element_by_css_selector(".cc-cookie-decline").click()
     time.sleep(2)
     b.find_element_by_css_selector(".growl-notification .close").click()
-    time.sleep(2)
-    b.get(LOGIN)
-    time.sleep(2)
 
 
 def login():
+    b.get(LOGIN)
     b.find_element_by_id("gebruikersnaam").send_keys(config.username)
     b.find_element_by_id("password").send_keys(config.password)
     b.find_element_by_id("loginButton").click()
 
 
-def reagerenSuccess(b):
-    reageren_button = ".interactionColumn .primary.button"
-    reageren_button = b.find_element_by_css_selector(reageren_button)
+def notify(msg):
+    s.call(["notify-send", "Auto WoningNet", msg])
+
+
+def reagerenGelukt(b):
+    reageren_button = b.find_element_by_css_selector(".interactionColumn .primary.button")
     reageren_button_text = reageren_button.get_attribute("innerText")
 
     if reageren_button_text == "Reageren":
@@ -51,39 +53,46 @@ def reagerenSuccess(b):
         return False
 
 
-def reageer():
+def reageerOp(url):
+    b.get(url)
     time.sleep(5)
-    unit_selector = ".searchContainer .content .unitContainer > a.unitLink:first-of-type"
-    units = b.find_elements_by_css_selector(unit_selector)
+    unit_links = b.find_elements_by_css_selector(".unitContainer > a.unitLink:first-of-type")
 
-    i = 0
-    for unit in units:
-        if i < 3:
+    visible_notifications = 0
+    unit_notifications = b.find_elements_by_css_selector(".unitNotification")
+    for n in unit_notifications:
+        if n.is_displayed():
+            visible_notifications += 1
+
+    if len(unit_links) == visible_notifications:
+        notify("No woningen left to react on.")
+    elif visible_notifications < 2:
+        for unit in unit_links:
             link = unit.get_attribute("href")
             b.execute_script("window.open('" + link + "', '_blank');")
             b.switch_to.window(b.window_handles[1])
             time.sleep(3)
 
-            if reagerenSuccess(b):
+            if reagerenGelukt(b):
                 i += 1
                 b.close()
-                print("Reacted on woning: " + link)
+                notify("Reacted to woning: " + link)
             else:
-                print("Not possible to react on woning: " + link)
+                notify("Already reacted to woning: " + link)
                 b.close()
 
             b.switch_to.window(b.window_handles[0])
-
-    print("No woningen left to react on.")
-    s.call(["notify-send", "foo", "bar"])
-    b.quit()
+    else:
+        notify("No reactions left.")
 
 
-b = webdriver.Firefox()
-b.get(LOGIN)
-b.maximize_window()
+opts = Options()
+opts.headless = True
+b = webdriver.Firefox(options=opts)
 
+b.get(WONINGNET)
 noCookies()
 login()
-b.get(LOTING)
-reageer()
+reageerOp(REGULIER)
+reageerOp(LOTING)
+b.quit()
