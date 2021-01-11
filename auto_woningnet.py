@@ -1,4 +1,5 @@
 import config
+import re
 import time
 import subprocess as s
 from selenium import webdriver
@@ -11,7 +12,7 @@ from selenium.webdriver.support import expected_conditions as EC
 WONINGNET = "https://www.woningnetregioamsterdam.nl/"
 LOGIN = WONINGNET + "Inloggen"
 LOTING = WONINGNET + "Zoeken#model[Loting]~predef[2]"
-REGULIER = WONINGNET + "Zoeken#model[Regulier aanbod]~soort[Jongerenwoning]~predef[]"
+REGULIER = WONINGNET + "Zoeken#model[Regulier%20aanbod]~soort[Jongerenwoning]~predef[]"
 
 
 def noCookies():
@@ -28,7 +29,7 @@ def login():
 
 
 def notify(msg):
-    s.call(["notify-send", "Auto WoningNet", msg])
+    s.call(["notify-send", "-u", "critical", "-t", "0", "Auto WoningNet", msg])
 
 
 def reagerenGelukt(b):
@@ -67,23 +68,38 @@ def reageerOp(url):
     if len(unit_links) == visible_notifications:
         notify("No woningen left to react on.")
     elif visible_notifications < 2:
+        i = 0
         for unit in unit_links:
-            link = unit.get_attribute("href")
-            b.execute_script("window.open('" + link + "', '_blank');")
-            b.switch_to.window(b.window_handles[1])
-            time.sleep(3)
+            if i < 2:
+                link = unit.get_attribute("href")
+                b.execute_script("window.open('" + link + "', '_blank');")
+                b.switch_to.window(b.window_handles[1])
+                time.sleep(3)
 
-            if reagerenGelukt(b):
-                i += 1
-                b.close()
-                notify("Reacted to woning: " + link)
-            else:
-                notify("Already reacted to woning: " + link)
-                b.close()
+                if reagerenGelukt(b):
+                    i += 1
+                    b.close()
+                    notify("Reacted to woning: " + link)
+                else:
+                    notify("Already reacted to woning: " + link)
+                    b.close()
 
-            b.switch_to.window(b.window_handles[0])
+                b.switch_to.window(b.window_handles[0])
     else:
-        notify("No reactions left.")
+        notify("No reactions left on: " + url)
+
+
+def lotingBeschikbaar():
+    b.get(LOTING)
+    active_tab = b.find_element_by_css_selector(".tabMenu li.active a")
+    active_tab_text = active_tab.get_attribute("innerText")
+    active_tab_title = re.sub("\s\(\d+\)", "", active_tab_text)
+
+    if active_tab_text == "Loting":
+        return True
+    else:
+        notify("No Loting woningen available")
+        return False
 
 
 opts = Options()
@@ -93,6 +109,12 @@ b = webdriver.Firefox(options=opts)
 b.get(WONINGNET)
 noCookies()
 login()
-reageerOp(REGULIER)
-reageerOp(LOTING)
+
+reageerOp(
+    REGULIER
+)  ## TODO Write a function that checks how many reactions are left an runs reageerOp based on results
+
+if lotingBeschikbaar():
+    reageerOp(LOTING)
+
 b.quit()
