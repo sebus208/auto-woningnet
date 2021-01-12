@@ -114,7 +114,7 @@ def aantalReacties(url):
 
 
 opts = Options()
-opts.headless = False
+opts.headless = True
 b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
 
 b.get(WONINGNET)
