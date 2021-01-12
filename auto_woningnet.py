@@ -15,6 +15,9 @@ LOTING = WONINGNET + "Zoeken#model[Loting]~predef[2]"
 REGULIER = WONINGNET + "Zoeken#model[Regulier%20aanbod]~soort[Jongerenwoning]~predef[]"
 
 
+## TODO Fix git commit history duplicates
+
+
 def noCookies():
     b.find_element_by_css_selector(".cc-cookie-decline").click()
     time.sleep(2)
@@ -104,7 +107,7 @@ def lotingBeschikbaar():
 
 opts = Options()
 opts.headless = True
-b = webdriver.Firefox(options=opts)
+b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
 
 b.get(WONINGNET)
 noCookies()
