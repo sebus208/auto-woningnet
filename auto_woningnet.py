@@ -13,9 +13,9 @@ WONINGNET = "https://www.woningnetregioamsterdam.nl/"
 LOGIN = WONINGNET + "Inloggen"
 LOTING = WONINGNET + "Zoeken#model[Loting]~predef[2]"
 REGULIER = WONINGNET + "Zoeken#model[Regulier%20aanbod]~soort[Jongerenwoning]~predef[]"
+MAX_REACTIES = 2
 
-
-## TODO Fix git commit history duplicates
+## TODO Make it run on the GreenGeeks server
 
 
 def noCookies():
@@ -57,39 +57,28 @@ def reagerenGelukt(b):
         return False
 
 
-def reageerOp(url):
+def reageerOp(url, aantal_reacties):
     b.get(url)
     time.sleep(5)
     unit_links = b.find_elements_by_css_selector(".unitContainer > a.unitLink:first-of-type")
 
-    visible_notifications = 0
-    unit_notifications = b.find_elements_by_css_selector(".unitNotification")
-    for n in unit_notifications:
-        if n.is_displayed():
-            visible_notifications += 1
+    i = 0
+    for unit in unit_links:
+        if i < aantal_reacties:
+            link = unit.get_attribute("href")
+            b.execute_script("window.open('" + link + "', '_blank');")
+            b.switch_to.window(b.window_handles[1])
+            time.sleep(3)
 
-    if len(unit_links) == visible_notifications:
-        notify("No woningen left to react on.")
-    elif visible_notifications < 2:
-        i = 0
-        for unit in unit_links:
-            if i < 2:
-                link = unit.get_attribute("href")
-                b.execute_script("window.open('" + link + "', '_blank');")
-                b.switch_to.window(b.window_handles[1])
-                time.sleep(3)
+            if reagerenGelukt(b):
+                i += 1
+                b.close()
+                notify("Reacted to woning: " + link)
+            else:
+                notify("Already reacted to woning: " + link)
+                b.close()
 
-                if reagerenGelukt(b):
-                    i += 1
-                    b.close()
-                    notify("Reacted to woning: " + link)
-                else:
-                    notify("Already reacted to woning: " + link)
-                    b.close()
-
-                b.switch_to.window(b.window_handles[0])
-    else:
-        notify("No reactions left on: " + url)
+            b.switch_to.window(b.window_handles[0])
 
 
 def lotingBeschikbaar():
@@ -105,19 +94,44 @@ def lotingBeschikbaar():
         return False
 
 
+def aantalReacties(url):
+    b.get(url)
+    time.sleep(5)
+    unit_links = b.find_elements_by_css_selector(".unitContainer > a.unitLink:first-of-type")
+
+    visible_notifications = 0
+    unit_notifications = b.find_elements_by_css_selector(".unitNotification")
+    for n in unit_notifications:
+        if n.is_displayed():
+            visible_notifications += 1
+
+    if len(unit_links) == visible_notifications:
+        notify("No woningen left to react on.")
+        return 0
+    else:
+        print(visible_notifications)
+        return visible_notifications
+
+
 opts = Options()
-opts.headless = True
+opts.headless = False
 b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
 
 b.get(WONINGNET)
 noCookies()
 login()
 
-reageerOp(
-    REGULIER
-)  ## TODO Write a function that checks how many reactions are left an runs reageerOp based on results
+aantal_reguliere_reacties = aantalReacties(REGULIER)
+if aantal_reguliere_reacties < MAX_REACTIES:
+    reageerOp(REGULIER, aantal_reguliere_reacties)
+else:
+    notify("No reguliere woning reacties left")
 
 if lotingBeschikbaar():
-    reageerOp(LOTING)
+    aantal_loting_reacties = aantalReacties(LOTING)
+    if aantal_reguliere_reacties < MAX_REACTIES:
+        reageerOp(LOTING, aantal_loting_reacties)
+    else:
+        notify("No loting woning reacties left")
 
 b.quit()
