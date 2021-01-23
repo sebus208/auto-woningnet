@@ -16,6 +16,7 @@ REGULIER = WONINGNET + "Zoeken#model[Regulier%20aanbod]~soort[Jongerenwoning]~pr
 MAX_REACTIES = 2
 
 ## TODO Make it run on the GreenGeeks server
+## TODO Replace desktop notification with email notification
 
 
 def noCookies():
@@ -37,7 +38,8 @@ def notify(msg):
 
 def reagerenGelukt(b):
     reageren_button = b.find_element_by_css_selector(".interactionColumn .primary.button")
-    reageren_button_text = reageren_button.get_attribute("innerText")
+    reageren_button_innerText = reageren_button.get_attribute("innerText")
+    reageren_button_text = re.sub("\W+", "", reageren_button_innerText)
 
     if reageren_button_text == "Reageren":
         reageren_button.click()
@@ -61,10 +63,11 @@ def reageerOp(url, aantal_reacties):
     b.get(url)
     time.sleep(5)
     unit_links = b.find_elements_by_css_selector(".unitContainer > a.unitLink:first-of-type")
+    aantal_reacties_over = MAX_REACTIES - aantal_reacties
 
     i = 0
     for unit in unit_links:
-        if i < aantal_reacties:
+        if i < aantal_reacties_over:
             link = unit.get_attribute("href")
             b.execute_script("window.open('" + link + "', '_blank');")
             b.switch_to.window(b.window_handles[1])
@@ -83,9 +86,10 @@ def reageerOp(url, aantal_reacties):
 
 def lotingBeschikbaar():
     b.get(LOTING)
+    time.sleep(5)
     active_tab = b.find_element_by_css_selector(".tabMenu li.active a")
     active_tab_text = active_tab.get_attribute("innerText")
-    active_tab_title = re.sub("\s\(\d+\)", "", active_tab_text)
+    active_tab_title = re.sub("\W+", "", active_tab_text)
 
     if active_tab_text == "Loting":
         return True
@@ -108,13 +112,12 @@ def aantalReacties(url):
     if len(unit_links) == visible_notifications:
         notify("No woningen left to react on.")
         return 0
-    else:
-        print(visible_notifications)
-        return visible_notifications
+
+    return visible_notifications
 
 
 opts = Options()
-opts.headless = True
+opts.headless = False
 b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
 
 b.get(WONINGNET)
@@ -129,7 +132,8 @@ else:
 
 if lotingBeschikbaar():
     aantal_loting_reacties = aantalReacties(LOTING)
-    if aantal_reguliere_reacties < MAX_REACTIES:
+    print("aantal Loting: " + str(aantal_loting_reacties))
+    if aantal_loting_reacties < MAX_REACTIES:
         reageerOp(LOTING, aantal_loting_reacties)
     else:
         notify("No loting woning reacties left")
