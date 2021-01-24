@@ -1,6 +1,7 @@
 import config
 import re
 import time
+import os
 import subprocess as s
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
@@ -14,6 +15,7 @@ LOGIN = WONINGNET + "Inloggen"
 LOTING = WONINGNET + "Zoeken#model[Loting]~predef[2]"
 REGULIER = WONINGNET + "Zoeken#model[Regulier%20aanbod]~soort[Jongerenwoning]~predef[]"
 MAX_REACTIES = 2
+NOTIFY_TITLE = "Auto WoningNet"
 
 ## TODO Make it run on the GreenGeeks server
 ## TODO Replace desktop notification with email notification
@@ -32,14 +34,44 @@ def login():
     b.find_element_by_id("loginButton").click()
 
 
-def notify(msg):
-    s.call(["notify-send", "-u", "critical", "-t", "0", "Auto WoningNet", msg])
+# def notify(title, message):
+#     userID = (
+#         s.run(
+#             ["id", "-u", os.environ["SUDO_USER"]],
+#             stdout=s.PIPE,
+#             stderr=s.PIPE,
+#             check=True,
+#         )
+#         .stdout.decode("utf-8")
+#         .replace("\n", "")
+#     )
+
+#     s.run(
+#         [
+#             "sudo",
+#             "-u",
+#             os.environ["SUDO_USER"],
+#             "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{}/bus".format(userID),
+#             "notify-send",
+#             "-u",
+#             "critical",
+#             "-t",
+#             "0",
+#             "-i",
+#             "utilities-terminal",
+#             title,
+#             message,
+#         ],
+#         stdout=s.PIPE,
+#         stderr=s.PIPE,
+#         check=True,
+#     )
 
 
 def reagerenGelukt(b):
     reageren_button = b.find_element_by_css_selector(".interactionColumn .primary.button")
     reageren_button_innerText = reageren_button.get_attribute("innerText")
-    reageren_button_text = re.sub("\W+", "", reageren_button_innerText)
+    reageren_button_text = re.sub("[^a-z^A-Z]+", "", reageren_button_innerText)
 
     if reageren_button_text == "Reageren":
         reageren_button.click()
@@ -76,9 +108,9 @@ def reageerOp(url, aantal_reacties):
             if reagerenGelukt(b):
                 i += 1
                 b.close()
-                notify("Reacted to woning: " + link)
+                # notify(NOTIFY_TITLE, "Reacted to woning: " + link)
             else:
-                notify("Already reacted to woning: " + link)
+                # notify(NOTIFY_TITLE, "Already reacted to woning: " + link)
                 b.close()
 
             b.switch_to.window(b.window_handles[0])
@@ -86,16 +118,16 @@ def reageerOp(url, aantal_reacties):
 
 def lotingBeschikbaar():
     b.get(LOTING)
-    time.sleep(5)
+    time.sleep(8)
     active_tab = b.find_element_by_css_selector(".tabMenu li.active a")
     active_tab_text = active_tab.get_attribute("innerText")
-    active_tab_title = re.sub("\W+", "", active_tab_text)
+    active_tab_title = re.sub("[^a-z^A-Z]+", "", active_tab_text)
 
-    if active_tab_text == "Loting":
+    if active_tab_title == "Loting":
         return True
-    else:
-        notify("No Loting woningen available")
-        return False
+    # else:
+    # notify(NOTIFY_TITLE, "No Loting woningen available")
+    return False
 
 
 def aantalReacties(url):
@@ -110,14 +142,14 @@ def aantalReacties(url):
             visible_notifications += 1
 
     if len(unit_links) == visible_notifications:
-        notify("No woningen left to react on.")
+        # notify(NOTIFY_TITLE, "No woningen left to react on.")
         return 0
 
     return visible_notifications
 
 
 opts = Options()
-opts.headless = False
+opts.headless = True
 b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
 
 b.get(WONINGNET)
@@ -127,15 +159,14 @@ login()
 aantal_reguliere_reacties = aantalReacties(REGULIER)
 if aantal_reguliere_reacties < MAX_REACTIES:
     reageerOp(REGULIER, aantal_reguliere_reacties)
-else:
-    notify("No reguliere woning reacties left")
+# else:
+# notify(NOTIFY_TITLE, "No reguliere woning reacties left")
 
 if lotingBeschikbaar():
     aantal_loting_reacties = aantalReacties(LOTING)
-    print("aantal Loting: " + str(aantal_loting_reacties))
     if aantal_loting_reacties < MAX_REACTIES:
         reageerOp(LOTING, aantal_loting_reacties)
-    else:
-        notify("No loting woning reacties left")
+    # else:
+    # notify(NOTIFY_TITLE, "No loting woning reacties left")
 
 b.quit()
