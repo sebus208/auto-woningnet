@@ -1,8 +1,12 @@
 import config
 import re
-import time
 import os
-import subprocess as s
+import time
+import smtplib
+import logging
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.keys import Keys
@@ -15,10 +19,10 @@ LOGIN = WONINGNET + "Inloggen"
 LOTING = WONINGNET + "Zoeken#model[Loting]~predef[2]"
 REGULIER = WONINGNET + "Zoeken#model[Regulier%20aanbod]~soort[Jongerenwoning]~predef[]"
 MAX_REACTIES = 2
-NOTIFY_TITLE = "Auto WoningNet"
 
 ## TODO Make it run on the GreenGeeks server
-## TODO Replace desktop notification with email notification
+## TODO Improve logging by making messages more specific
+## TODO Prevent crashing by wrapping clicks in try except blocks
 
 
 def noCookies():
@@ -32,40 +36,6 @@ def login():
     b.find_element_by_id("gebruikersnaam").send_keys(config.username)
     b.find_element_by_id("password").send_keys(config.password)
     b.find_element_by_id("loginButton").click()
-
-
-# def notify(title, message):
-#     userID = (
-#         s.run(
-#             ["id", "-u", os.environ["SUDO_USER"]],
-#             stdout=s.PIPE,
-#             stderr=s.PIPE,
-#             check=True,
-#         )
-#         .stdout.decode("utf-8")
-#         .replace("\n", "")
-#     )
-
-#     s.run(
-#         [
-#             "sudo",
-#             "-u",
-#             os.environ["SUDO_USER"],
-#             "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{}/bus".format(userID),
-#             "notify-send",
-#             "-u",
-#             "critical",
-#             "-t",
-#             "0",
-#             "-i",
-#             "utilities-terminal",
-#             title,
-#             message,
-#         ],
-#         stdout=s.PIPE,
-#         stderr=s.PIPE,
-#         check=True,
-#     )
 
 
 def reagerenGelukt(b):
@@ -108,9 +78,9 @@ def reageerOp(url, aantal_reacties):
             if reagerenGelukt(b):
                 i += 1
                 b.close()
-                # notify(NOTIFY_TITLE, "Reacted to woning: " + link)
+                logging.info("Reacted to woning: " + link)
             else:
-                # notify(NOTIFY_TITLE, "Already reacted to woning: " + link)
+                logging.info("Already reacted to woning: " + link)
                 b.close()
 
             b.switch_to.window(b.window_handles[0])
@@ -125,8 +95,8 @@ def lotingBeschikbaar():
 
     if active_tab_title == "Loting":
         return True
-    # else:
-    # notify(NOTIFY_TITLE, "No Loting woningen available")
+    else:
+        logging.info("No Loting woningen available")
     return False
 
 
@@ -142,15 +112,21 @@ def aantalReacties(url):
             visible_notifications += 1
 
     if len(unit_links) == visible_notifications:
-        # notify(NOTIFY_TITLE, "No woningen left to react on.")
+        logging.info("No woningen on " + url + " left to react on.")
         return 0
-
     return visible_notifications
 
+
+logging.basicConfig(filename=config.log_path, level=logging.INFO)
+# logging.debug("This message should go to the log file")
+# logging.info("So should this")
+# logging.warning("And this, too")
+# logging.error("And non-ASCII stuff, too")
 
 opts = Options()
 opts.headless = True
 b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
+b.maximize_window()
 
 b.get(WONINGNET)
 noCookies()
@@ -159,14 +135,33 @@ login()
 aantal_reguliere_reacties = aantalReacties(REGULIER)
 if aantal_reguliere_reacties < MAX_REACTIES:
     reageerOp(REGULIER, aantal_reguliere_reacties)
-# else:
-# notify(NOTIFY_TITLE, "No reguliere woning reacties left")
+else:
+    logging.info("No reguliere woning reacties left")
 
 if lotingBeschikbaar():
     aantal_loting_reacties = aantalReacties(LOTING)
     if aantal_loting_reacties < MAX_REACTIES:
         reageerOp(LOTING, aantal_loting_reacties)
-    # else:
-    # notify(NOTIFY_TITLE, "No loting woning reacties left")
+    else:
+        logging.info("No loting woning reacties left")
 
 b.quit()
+
+msg = MIMEMultipart()
+msg["Subject"] = "Log"
+msg["From"] = "Auto WoningNet <" + config.send_email + ">"
+msg["To"] = config.receive_email
+msg.attach(MIMEText(open(config.log_path).read()))
+
+try:
+    smtpObj = smtplib.SMTP_SSL(config.outgoing_smtp)
+    smtpObj.connect(config.outgoing_smtp, 465)
+    smtpObj.ehlo()
+    smtpObj.login(config.send_email, config.email_pass)
+    smtpObj.sendmail(config.send_email, config.receive_email, msg.as_string())
+    smtpObj.quit()
+except Exception as e:
+    print(e)
+else:
+    if os.path.exists(config.log_path):
+        os.remove(config.log_path)
