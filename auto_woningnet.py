@@ -23,6 +23,37 @@ MAX_REACTIES = 2
 ## TODO Make it run on the GreenGeeks server
 ## TODO Improve logging by making messages more specific
 ## TODO Prevent crashing by wrapping clicks in try except blocks
+# def find_element_click(
+#     self, by, expression, search_window=None, timeout=32, ignore_exception=None, poll_frequency=4
+# ):
+#     if ignore_exception is None:
+#         ignore_exception = []
+
+#     ignore_exception.append(NoSuchElementException)
+#     ignore_exception.append(ElementClickInterceptedException)
+#     ignore_exception.append(ElementNotInteractableException)
+#     if search_window is None:
+#         search_window = self.driver
+
+#     end_time = time.time() + timeout
+#     while True:
+#         try:
+#             web_element = search_window.find_element(by=by, value=expression)
+#             web_element.click()
+#             return True
+#         except tuple(ignore_exception) as e:
+#             self.logger.debug(str(e))
+#             if time.time() > end_time:
+#                 self.logger.exception(e)
+#                 time.sleep(poll_frequency)
+#                 break
+#         except Exception as e:
+#             raise
+#     return False
+
+
+def jsClick(el):
+    b.execute_script("arguments[0].click();", el)
 
 
 def noCookies():
@@ -44,16 +75,21 @@ def reagerenGelukt(b):
     reageren_button_text = re.sub("[^a-z^A-Z]+", "", reageren_button_innerText)
 
     if reageren_button_text == "Reageren":
-        reageren_button.click()
+        jsClick(reageren_button)
         time.sleep(3)
 
         try:
-            b.find_element_by_css_selector(".tabMenuContainer dd:not(.active)").click()
+            tab = b.find_element_by_css_selector(".tabMenuContainer dd:not(.active)")
+            jsClick(tab)
         except:
             return False
 
-        b.find_element_by_css_selector("#akkoordContainer label").click()
-        b.find_element_by_id("formsubmitbutton").click()
+        checkbox = b.find_element_by_css_selector("#akkoordContainer label")
+        jsClick(checkbox)
+
+        submit = b.find_element_by_id("formsubmitbutton")
+        jsClick(submit)
+
         time.sleep(5)
 
         return True
@@ -126,7 +162,7 @@ logging.basicConfig(filename=config.log_path, level=logging.INFO)
 opts = Options()
 opts.headless = True
 b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
-b.maximize_window()
+# b.maximize_window()
 
 b.get(WONINGNET)
 noCookies()
