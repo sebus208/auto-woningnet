@@ -90,27 +90,29 @@ def reagerenGelukt(b):
 def reageerOp(url, aantal_reacties):
     try:
         b.get(url)
-        time.sleep(5)
+        time.sleep(10)
         unit_links = b.find_elements_by_css_selector(".unitContainer > a.unitLink:first-of-type")
-        aantal_reacties_over = MAX_REACTIES - aantal_reacties
+        # aantal_reacties_over = MAX_REACTIES - aantal_reacties
 
         i = 0
         for unit in unit_links:
-            if i < aantal_reacties_over:
+            if i < aantal_reacties:
                 link = unit.get_attribute("href")
                 b.execute_script("window.open('" + link + "', '_blank');")
                 b.switch_to.window(b.window_handles[1])
                 time.sleep(3)
 
                 if reagerenGelukt(b):
-                    i += 1
+                    # i += 1
                     b.close()
                     logging.info("Reacted to woning: " + link)
                 else:
+                    i += 1
                     logging.info("Already reacted to woning: " + link)
                     b.close()
 
                 b.switch_to.window(b.window_handles[0])
+                time.sleep(3)
     except Exception as e:
         logging.error(e)
         mailLog()
@@ -120,17 +122,23 @@ def reageerOp(url, aantal_reacties):
 def lotingBeschikbaar():
     try:
         b.get(LOTING)
-        time.sleep(8)
-        active_tab = b.find_element_by_css_selector(".tabMenu li.active a")
+        time.sleep(5)
+        b.refresh()
+        time.sleep(5)
+        active_tab = b.find_element_by_css_selector(".tabMenu > li:last-of-type a")
         active_tab_text = active_tab.get_attribute("innerText")
+        logging.info("Loting tab text: " + active_tab_text)
+
         active_tab_title = re.sub("[^a-z^A-Z]+", "", active_tab_text)
 
         if active_tab_title == "Loting":
+            logging.info("Loting woningen are available")
             return True
         else:
             logging.info("No Loting woningen available")
         return False
     except Exception as e:
+        logging.info("An error ocurred while checking if lotingBeschikbaar")
         logging.error(e)
         mailLog()
         b.quit()
@@ -139,13 +147,13 @@ def lotingBeschikbaar():
 def aantalReacties(url):
     try:
         b.get(url)
-        time.sleep(5)
+        time.sleep(10)
         unit_links = b.find_elements_by_css_selector(".unitContainer > a.unitLink:first-of-type")
 
         visible_notifications = 0
         unit_notifications = b.find_elements_by_css_selector(".unitNotification")
         for n in unit_notifications:
-            if n.is_displayed():
+            if b.execute_script("return arguments[0].style.display;", n) != "none":
                 visible_notifications += 1
 
         if len(unit_links) == visible_notifications:
@@ -153,6 +161,7 @@ def aantalReacties(url):
             return 0
         return visible_notifications
     except Exception as e:
+        logging.info("An error ocurred while checking the aantalReacties")
         logging.error(e)
         mailLog()
         b.quit()
@@ -182,7 +191,7 @@ def mailLog():
 logging.basicConfig(filename=config.log_path, level=logging.INFO)
 
 opts = Options()
-opts.headless = True
+opts.headless = False
 b = webdriver.Firefox(options=opts, service_log_path="/dev/null")
 
 b.get(WONINGNET)
@@ -190,17 +199,21 @@ noCookies()
 login()
 
 aantal_reguliere_reacties = aantalReacties(REGULIER)
-if aantal_reguliere_reacties < MAX_REACTIES:
-    reageerOp(REGULIER, aantal_reguliere_reacties)
-else:
-    logging.info("No reguliere woning reacties left")
+logging.info("Aantal reguliere reacties available: " + str(aantal_reguliere_reacties))
+# if aantal_reguliere_reacties < MAX_REACTIES:
+#     reageerOp(REGULIER, aantal_reguliere_reacties)
+# else:
+#     logging.info("No reguliere woning reacties left")
+reageerOp(REGULIER, MAX_REACTIES)
 
 if lotingBeschikbaar():
     aantal_loting_reacties = aantalReacties(LOTING)
-    if aantal_loting_reacties < MAX_REACTIES:
-        reageerOp(LOTING, aantal_loting_reacties)
-    else:
-        logging.info("No loting woning reacties left")
+    logging.info("Aantal loting reacties available: " + str(aantal_loting_reacties))
+    # if aantal_loting_reacties < MAX_REACTIES:
+    #     reageerOp(LOTING, aantal_loting_reacties)
+    # else:
+    #     logging.info("No loting woning reacties left")
+    reageerOp(LOTING, MAX_REACTIES)
 
 b.quit()
 mailLog()
